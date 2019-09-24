@@ -1,27 +1,36 @@
 package com.example.android.quakereport;
 
+import android.app.LoaderManager;
+import android.content.Context;
 import android.content.Intent;
+import android.content.Loader;
+import android.app.LoaderManager.LoaderCallbacks;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
 import android.net.Uri;
-import android.os.AsyncTask;
 import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
 import android.view.View;
 import android.widget.AdapterView;
-import android.widget.ArrayAdapter;
+import android.widget.ImageView;
 import android.widget.ListView;
+import android.widget.ProgressBar;
 
 import java.util.ArrayList;
 import java.util.List;
 
-public class EarthquakeActivity extends AppCompatActivity {
+public class EarthquakeActivity extends AppCompatActivity implements LoaderCallbacks<List<Earthquake>> {
 
     EarthquakeAdapter adapter;
+    ImageView emptyImage;
+    ProgressBar progressBar;
 
     /** Tag for the log messages */
     public static final String LOG_TAG = EarthquakeActivity.class.getSimpleName();
 
     /** URL to query the USGS dataset for earthquake information */
-    private static final String SAMPLE_JSON_RESPONSE = "https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&eventtype=earthquake&orderby=time&minmag=5&limit=20";
+    private static final String SAMPLE_JSON_RESPONSE =
+            "https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&eventtype=earthquake&orderby=time&minmag=5";
 
 
     @Override
@@ -29,12 +38,31 @@ public class EarthquakeActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.earthquake_activity);
 
-        EarthquakeAsyncTask task = new EarthquakeAsyncTask();
-        task.execute(SAMPLE_JSON_RESPONSE);
+        ListView earthquakeListView = (ListView) findViewById(R.id.list);
+        emptyImage = (ImageView) findViewById(R.id.empty_state);
+        progressBar = (ProgressBar) findViewById(R.id.progress_circular);
+        earthquakeListView.setEmptyView(emptyImage);
 
+
+        ConnectivityManager connectivityManager =
+                (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+        NetworkInfo networkInfo = connectivityManager.getActiveNetworkInfo();
+
+        if(networkInfo!= null && networkInfo.isConnected()) {
+            LoaderManager loaderManager = getLoaderManager();
+            loaderManager.initLoader(0, null, this);
+        }
+        else {
+
+            progressBar.setVisibility(View.GONE);
+            emptyImage.setImageResource(R.drawable.nointernet);
+
+
+        }
 
         // Find a reference to the {@link ListView} in the layout
-        ListView earthquakeListView = (ListView) findViewById(R.id.list);
+
+        //earthquakeListView.setEmptyView(textView);
 
         // Create a new {@link ArrayAdapter} of earthquakes
         adapter = new EarthquakeAdapter (this,new ArrayList<Earthquake>());
@@ -42,6 +70,7 @@ public class EarthquakeActivity extends AppCompatActivity {
         // Set the adapter on the {@link ListView}
         // so the list can be populated in the user interface
         earthquakeListView.setAdapter(adapter);
+
 
         earthquakeListView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             @Override
@@ -61,26 +90,26 @@ public class EarthquakeActivity extends AppCompatActivity {
         });
     }
 
-    private class EarthquakeAsyncTask extends AsyncTask<String,Void, List<Earthquake>>{
+    @Override
+    public Loader<List<Earthquake>> onCreateLoader(int i, Bundle bundle) {
+        return new EarthquakeLoader(this, SAMPLE_JSON_RESPONSE);
+    }
 
-        @Override
-        protected List<Earthquake> doInBackground(String... strings) {
+    @Override
+    public void onLoadFinished(Loader<List<Earthquake>> loader, List<Earthquake> earthquakes) {
 
-            if (strings.length < 1 || strings[0] == null) {
-                return null;
-            }
-
-            List<Earthquake> result = QueryUtils.fetchEarthquakeData(strings[0]);
-            return result;
+        emptyImage.setImageResource(R.drawable.emptystate);
+        progressBar.setVisibility(View.GONE);
+        adapter.clear();
+        if (earthquakes != null && !earthquakes.isEmpty()) {
+           adapter.addAll(earthquakes);
         }
 
-        @Override
-        protected void onPostExecute(List<Earthquake> earthquakes) {
-            adapter.clear();
-            if (earthquakes != null && !earthquakes.isEmpty()) {
-                adapter.addAll(earthquakes);
-            }
-        }
+    }
+
+    @Override
+    public void onLoaderReset(Loader<List<Earthquake>> loader) {
+        adapter.clear();
     }
 
 
